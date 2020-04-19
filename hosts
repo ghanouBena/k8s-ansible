@@ -1,0 +1,16 @@
+[k8s8:children]
+masters
+nodes
+
+[masters]
+192.168.1.160 
+
+[nodes]
+192.168.1.161 
+
+[k8s8:vars]
+master="192.168.1.160"
+node1="192.168.1.161"
+ansible_connection=ssh
+ansible_user=root
+ansible_port=22

@@ -1,0 +1,117 @@
+---
+# tasks file for roles/kubernetes
+- name: Create repo for Kubernetes in yum.repos.d
+  copy:
+    src: kubernetes.repo
+    dest: /etc/yum.repos.d/
+    owner: root
+    group: root
+    mode: 0664
+
+- name: Install packages on master and nodes
+  yum:
+    name: "{{ packages }}"
+    state: present
+
+- name: Delete the hosts file
+  file:
+    path: /etc/hosts
+    state: absent
+  when: generate_new_hosts == True
+
+- name: Generate and install new hosts file
+  template:
+    src: hosts.j2
+    dest: /etc/hosts
+    owner: root
+    group: root
+    mode: 0644
+  when: generate_new_hosts == True
+
+- name: Add Masters and Worker Node to the hosts file
+  lineinfile:
+    path: /etc/hosts
+    line: "{{ item.ip }} {{ item.hostname }}"
+  with_items:
+    - "{{ hosts }}"
+  when: generate_new_hosts == False
+
+- name: Update Iptables Settings
+  copy:
+    src: master_node_name.conf
+    dest: /etc/sysctl.d/
+    owner: root
+    group: root
+    mode: 0644
+
+- name: Upload new configuration of sysctl
+  shell: sysctl --system
+
+- name: Disable swap on runtime
+  shell: swapoff -a
+
+- name: Disable swap in fstab
+  lineinfile:
+    path: /etc/fstab
+    regexp: "^{{ item }}"
+    state: absent
+  with_items:
+    - "{{ fstab_swap }}"
+
+- name: Set SElinux in permissive mode in the runtime
+  shell: setenforce 0
+
+- name: Set SElinux in permissive mode in the configuration file
+  lineinfile:
+    path: /etc/sysconfig/selinux
+    regexp: "^SELINUX="
+    line: "SELINUX=permissive"
+    state: present
+  when: selinux_permissive == True
+
+- name: open port on firewllad on the masters k8s
+  firewalld:
+    port: "{{ item }}"
+    permanent: yes
+    state: enabled
+  with_items:
+    - "{{ ports_masters }}"
+  when: ansible_default_ipv4.address == master
+
+- name: open ports on firewalld on the nodes workers
+  firewalld:
+    port: "{{ item }}"
+    permanent: yes
+    state: enabled
+  with_items:
+    - "{{ ports_nodes }}"
+  when: ansible_default_ipv4.address != master
+
+- name: Reload firewalld
+  shell: firewall-cmd --reload
+
+- name: statrt docker and kubelet
+  service:
+    name: "{{ item }}"
+    state: started
+    enabled: yes
+  with_items:
+    - docker
+    - kubelet
+    
+- name: Start initiate the masters
+  shell: kubeadm init
+  register: kubeadm
+  when: ansible_default_ipv4 == master
+
+- name: Configure the Masters to use the cluster as root user
+  shell: mkdir -p $HOME/.kube; cp -i /etc/kubernetes/admin.conf $HOME/.kube/config; chown $(id -u):$(id -g) $HOME/.kube/config
+  when: ansible_default_ipv4 === master
+
+- name: Deploy the weave-net for the network
+  shell: export kubever=$(kubectl version | base64 | tr -d '\n'); kubectl apply -f "https://cloud.weave.works/k8s/net?k8s-version=$kubever"
+  when: ansible_default_ipv4 == master
+
+- name: Start join Worker nodes
+  shell: "{{ kubeadm.stdout_lines[-1] }}"
+  when: ansible_default_ipv4 != master

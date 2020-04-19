@@ -1,0 +1,43 @@
+---
+# defaults file for roles/kubernetes
+# 
+# hosts variable for generate hosts file
+hosts:
+  - ip: "192.168.1.160"
+    hostname: "master master.abcompany.com"
+  - ip: "192.168.1.161"
+    hostname: "node1 node1.abcompany.com"
+# Set this generate_new_hosts: False 
+# if you dont have to generate new hosts file 
+generate_new_hosts: True
+
+# packages will be install on master and nodes
+packages: ["kubelet","kubeadm","kubectl","docker"]
+
+# ports for openning communication in firewalld for masters
+ports_masters:
+  - "6443/tcp"
+  - "2379-2380/tcp"
+  - "10250-10255/tcp"
+  - "8443/tcp"
+  - "8001/tcp"
+
+# ports for openning communication in firewalld for nodes
+ports_nodes:
+  - "10250-10255/tcp"
+  - "30000-32767/tcp"
+  - "6783/tcp"
+  - "8443/tcp"
+  - "8001/tcp"
+
+# swap path in the fstab file 
+# execute this command for see what device is mount like swap
+# 
+# cat /etc/fstab | grep -i swap
+#
+fstab_swap: 
+  - "/dev/mapper/centos_master-swap"
+  - "/dev/mapper/centos_node1-swap"
+
+# Set SElinux in permissive mode
+selinux_permissive: True

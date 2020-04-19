@@ -1,0 +1,5 @@
+---
+- hosts: k8s8
+  become: yes
+  roles:
+    - ./roles/kubernetes
